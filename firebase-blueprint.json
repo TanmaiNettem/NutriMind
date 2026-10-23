@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile metadata for an authenticated NutriMind user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth user identifier" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoURL": { "type": "string", "description": "User avatar photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated timestamp" }
+      },
+      "required": ["uid"]
+    },
+    "Meal": {
+      "title": "Meal",
+      "description": "A saved nutrition analysis document for a meal consumed by the user.",
+      "type": "object",
+      "properties": {
+        "mealName": { "type": "string", "description": "Display name of the meal" },
+        "mealType": { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snack", "other"], "description": "Category of meal" },
+        "userInput": { "type": "string", "description": "Original text prompt input by the user" },
+        "foods": { "type": "array", "description": "Array of decomposed foods with individual portions and macros" },
+        "totals": { "type": "object", "description": "Calculated macronutrient totals for this meal" },
+        "assumptions": { "type": "array", "description": "Culinary and portion assumptions made during analysis" },
+        "nutritionInsight": { "type": "string", "description": "Non-judgmental dietary perspective or insight" },
+        "focusAreas": { "type": "array", "description": "Target dietary priorities identified" },
+        "dateString": { "type": "string", "description": "Local date in YYYY-MM-DD format for precise daily grouping" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the meal was logged" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the meal was last updated" }
+      },
+      "required": ["mealName", "mealType", "foods", "totals"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "An AI assistant conversation session belonging to the user.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Descriptive conversation title" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when session began" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of most recent message" }
+      },
+      "required": ["title"]
+    },
+    "ConversationMessage": {
+      "title": "ConversationMessage",
+      "description": "A single user or assistant message inside a conversation.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "assistant"], "description": "Sender role" },
+        "content": { "type": "string", "description": "User visible message content" },
+        "responseType": { "type": "string", "description": "Structured assistant response type" },
+        "analysis": { "type": "object", "description": "Attached meal analysis if any" },
+        "suggestedFollowUps": { "type": "array", "description": "Follow-up questions or prompts" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Message creation timestamp" }
+      },
+      "required": ["role", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Contains user profile info strictly accessible to the user themselves"
+    },
+    "/users/{userId}/meals/{mealId}": {
+      "schema": { "$ref": "#/entities/Meal" },
+      "description": "Contains saved meal analyses strictly accessible to the owning user"
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Contains assistant conversation headers strictly accessible to the owning user"
+    },
+    "/users/{userId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ConversationMessage" },
+      "description": "Contains individual messages strictly accessible to the owning user"
+    }
+  }
+}

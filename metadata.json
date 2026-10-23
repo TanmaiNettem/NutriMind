@@ -1,0 +1,6 @@
+{
+  "name": "NutriMind",
+  "description": "AI-powered smart nutrition companion that turns everyday meals into simple, meaningful nutrition insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

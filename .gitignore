@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build outputs
+dist/
+build/
+coverage/
+
+# Environment files and API keys (CRITICAL - never commit secrets!)
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Sensitive credentials & private Firebase configurations
+firebase-applet-config.json
+serviceAccountKey*.json
+*credentials*.json
+*.pem
+*.key
+
+# AI Studio internal caches & OS files
+.aistudio/
+.DS_Store
+*.log
+Thumbs.db
