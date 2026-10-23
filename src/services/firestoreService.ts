@@ -12,7 +12,7 @@ import {
   limit,
   Timestamp
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 import { MealAnalysisResult, FoodItem, MacroTotals, ChatMessage, SavedConversation, UserProfile } from '../types';
 
 /**
@@ -163,7 +163,7 @@ export async function syncUserProfile(user: {
   email?: string | null;
   photoURL?: string | null;
 }): Promise<void> {
-  if (!user.uid) return;
+  if (!user.uid || !isFirebaseConfigured) return;
   try {
     const userRef = doc(db, 'users', user.uid);
     const existing = await getDoc(userRef);
@@ -191,7 +191,7 @@ export async function syncUserProfile(user: {
 }
 
 /**
- * Persist a validated meal to Firestore under users/{uid}/meals/{mealId}.
+ * Persist a validated meal to Firestore or local storage.
  */
 export async function saveMealToFirestore(
   uid: string,
@@ -203,6 +203,26 @@ export async function saveMealToFirestore(
 
   const sanitized = validateAndSanitizeMeal(meal);
   const mealId = meal.id || `meal_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+  // If Firebase is not configured, save locally
+  if (!isFirebaseConfigured) {
+    try {
+      const storageKey = `nutrimind_meals_${uid}`;
+      const saved = localStorage.getItem(storageKey);
+      const meals: any[] = saved ? JSON.parse(saved) : [];
+      const updated = [{ ...sanitized, id: mealId, createdAt: new Date().toISOString() }, ...meals.filter(m => m.id !== mealId)];
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    return {
+      ...meal,
+      ...sanitized,
+      id: mealId,
+      saveStatus: 'saved'
+    };
+  }
+
   const mealRef = doc(db, 'users', uid, 'meals', mealId);
 
   try {
@@ -236,10 +256,23 @@ export async function saveMealToFirestore(
 }
 
 /**
- * Fetch all meals for an authenticated user from Firestore.
+ * Fetch all meals for an authenticated user from Firestore or local storage.
  */
 export async function loadUserMealsFromFirestore(uid: string): Promise<MealAnalysisResult[]> {
   if (!uid) return [];
+
+  if (!isFirebaseConfigured) {
+    try {
+      const storageKey = `nutrimind_meals_${uid}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  }
 
   const mealsCol = collection(db, 'users', uid, 'meals');
 
@@ -296,7 +329,7 @@ export async function loadUserMealsFromFirestore(uid: string): Promise<MealAnaly
 }
 
 /**
- * Update an existing meal in Firestore.
+ * Update an existing meal in Firestore or local storage.
  */
 export async function updateMealInFirestore(
   uid: string,
@@ -304,6 +337,21 @@ export async function updateMealInFirestore(
   updates: Partial<MealAnalysisResult>
 ): Promise<void> {
   if (!uid || !mealId) return;
+
+  if (!isFirebaseConfigured) {
+    try {
+      const storageKey = `nutrimind_meals_${uid}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const meals: any[] = JSON.parse(saved);
+        const updated = meals.map(m => m.id === mealId ? { ...m, ...updates } : m);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      }
+    } catch {
+      // ignore
+    }
+    return;
+  }
 
   const mealRef = doc(db, 'users', uid, 'meals', mealId);
 
@@ -323,10 +371,24 @@ export async function updateMealInFirestore(
 }
 
 /**
- * Delete a meal from Firestore.
+ * Delete a meal from Firestore or local storage.
  */
 export async function deleteMealFromFirestore(uid: string, mealId: string): Promise<void> {
   if (!uid || !mealId) return;
+
+  if (!isFirebaseConfigured) {
+    try {
+      const storageKey = `nutrimind_meals_${uid}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const meals: any[] = JSON.parse(saved);
+        localStorage.setItem(storageKey, JSON.stringify(meals.filter(m => m.id !== mealId)));
+      }
+    } catch {
+      // ignore
+    }
+    return;
+  }
 
   const mealRef = doc(db, 'users', uid, 'meals', mealId);
 
@@ -349,7 +411,7 @@ export async function saveConversationHeader(
   conversationId: string,
   title: string
 ): Promise<void> {
-  if (!uid || !conversationId) return;
+  if (!uid || !conversationId || !isFirebaseConfigured) return;
 
   try {
     const convRef = doc(db, 'users', uid, 'conversations', conversationId);
@@ -375,7 +437,7 @@ export async function saveConversationMessage(
   conversationId: string,
   message: ChatMessage
 ): Promise<void> {
-  if (!uid || !conversationId || !message.id) return;
+  if (!uid || !conversationId || !message.id || !isFirebaseConfigured) return;
 
   try {
     const msgRef = doc(
@@ -416,7 +478,7 @@ export async function saveConversationMessage(
  * Load recent conversation headers for the user.
  */
 export async function loadUserConversations(uid: string): Promise<SavedConversation[]> {
-  if (!uid) return [];
+  if (!uid || !isFirebaseConfigured) return [];
   try {
     const convCol = collection(db, 'users', uid, 'conversations');
     let snapshot;
@@ -452,7 +514,7 @@ export async function loadConversationMessages(
   uid: string,
   conversationId: string
 ): Promise<ChatMessage[]> {
-  if (!uid || !conversationId) return [];
+  if (!uid || !conversationId || !isFirebaseConfigured) return [];
   try {
     const msgCol = collection(db, 'users', uid, 'conversations', conversationId, 'messages');
     let snapshot;

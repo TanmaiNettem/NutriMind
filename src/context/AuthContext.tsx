@@ -9,7 +9,7 @@ import {
   sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase';
 
 export interface AppUser {
   uid: string;
@@ -24,6 +24,7 @@ export interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isFirebaseConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -82,46 +83,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Listen to Firebase Auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      // If a demo user is active, don't overwrite with null
-      const isDemoActive = sessionStorage.getItem('nutrimind_demo_user');
-      if (isDemoActive) {
-        setLoading(false);
-        return;
-      }
-
-      if (currentUser) {
-        setUser({
-          uid: currentUser.uid,
-          email: currentUser.email,
-          displayName: currentUser.displayName,
-          photoURL: currentUser.photoURL,
-          providerId: currentUser.providerData?.[0]?.providerId || 'password',
-          isDemo: false
-        });
-      } else {
-        setUser(null);
-      }
+    // Safety timeout: ensure loading screen NEVER hangs permanently (max 1.5 seconds)
+    const safetyTimer = setTimeout(() => {
       setLoading(false);
-    });
+    }, 1500);
 
-    return () => unsubscribe();
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      clearTimeout(safetyTimer);
+      return;
+    }
+
+    // Listen to Firebase Auth state changes
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onAuthStateChanged(
+        auth, 
+        (currentUser) => {
+          clearTimeout(safetyTimer);
+          // If a demo user is active, don't overwrite with null
+          const isDemoActive = sessionStorage.getItem('nutrimind_demo_user');
+          if (isDemoActive) {
+            setLoading(false);
+            return;
+          }
+
+          if (currentUser) {
+            setUser({
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL,
+              providerId: currentUser.providerData?.[0]?.providerId || 'password',
+              isDemo: false
+            });
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.warn('onAuthStateChanged notice:', error);
+          clearTimeout(safetyTimer);
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+      console.warn('Firebase onAuthStateChanged setup error:', err);
+      clearTimeout(safetyTimer);
+      setLoading(false);
+    }
+
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<void> => {
     sessionStorage.removeItem('nutrimind_demo_user');
+    if (!isFirebaseConfigured) {
+      // In unconfigured / offline demo mode, sign in immediately as local user
+      const demoUser: AppUser = {
+        uid: `user_${Date.now()}`,
+        email: email.trim(),
+        displayName: email.split('@')[0] || 'NutriMind Explorer',
+        photoURL: null,
+        providerId: 'password',
+        isDemo: true
+      };
+      sessionStorage.setItem('nutrimind_demo_user', JSON.stringify(demoUser));
+      setUser(demoUser);
+      return;
+    }
     await signInWithEmailAndPassword(auth, email.trim(), password);
   };
 
   const signUp = async (email: string, password: string, displayName: string): Promise<void> => {
     sessionStorage.removeItem('nutrimind_demo_user');
+    if (!isFirebaseConfigured) {
+      const demoUser: AppUser = {
+        uid: `user_${Date.now()}`,
+        email: email.trim(),
+        displayName: displayName.trim() || email.split('@')[0] || 'NutriMind Explorer',
+        photoURL: null,
+        providerId: 'password',
+        isDemo: true
+      };
+      sessionStorage.setItem('nutrimind_demo_user', JSON.stringify(demoUser));
+      setUser(demoUser);
+      return;
+    }
     const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
     if (displayName.trim() && credential.user) {
       await updateProfile(credential.user, {
         displayName: displayName.trim()
       });
-      // Update state
       setUser({
         uid: credential.user.uid,
         email: credential.user.email,
@@ -135,6 +192,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async (): Promise<void> => {
     sessionStorage.removeItem('nutrimind_demo_user');
+    if (!isFirebaseConfigured) {
+      signInAsDemo();
+      return;
+    }
     await signInWithPopup(auth, googleProvider);
   };
 

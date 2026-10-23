@@ -241,12 +241,62 @@ function NutriMindApp() {
   );
 }
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('NutriMind application error caught by ErrorBoundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#FBFDFB] text-[#192A22] p-6">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-stone-200/80 p-8 text-center">
+            <div className="w-14 h-14 bg-emerald-100 text-emerald-800 rounded-2xl flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+              🌱
+            </div>
+            <h2 className="text-xl font-bold text-stone-900 mb-2">NutriMind</h2>
+            <p className="text-sm text-stone-600 mb-6 leading-relaxed">
+              We refreshed your session to restore state. Click below to load NutriMind.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  window.location.hash = '';
+                  window.location.reload();
+                }}
+                className="flex-1 py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded-xl text-sm transition-colors shadow-sm"
+              >
+                Reload NutriMind
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <NutritionProvider>
-        <NutriMindApp />
-      </NutritionProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <NutritionProvider>
+          <NutriMindApp />
+        </NutritionProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
